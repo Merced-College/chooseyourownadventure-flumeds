@@ -1,32 +1,59 @@
+#include <iostream>
 #include <fstream>
 #include <sstream>
+#include <vector>
 #include <map>
+#include <memory>
 #include "LinkedList.h"
 #include "Enemy.h"
+#include "Weapon.h"
+
+using namespace std;
 
 void introduction() {
+    cout << "==========================================\n";
     cout << "Welcome to the Castle Adventure!\n";
-    cout << "You will navigate through various rooms in the castle, encountering challenges and making decisions that will determine your path.\n";
-    cout << "Choose your actions wisely. Let's start your journey!\n\n";
+    cout << "Navigate the rooms, collect weapons, and survive.\n";
+    cout << "==========================================\n\n";
 }
 
-bool fightEnemy(Enemy& enemy) {
+// Fight enemy using weapon if available, otherwise bare hands
+bool fightEnemy(Enemy& enemy, vector<Weapon>& inventory) {
     cout << "\n*** ENEMY ENCOUNTERED ***\n";
-    cout << enemy.toString() << "\n";
+    cout << "Enemy: " << enemy.getName() << "\n";
+    cout << "Description: " << enemy.getDescription() << "\n";
+    cout << "Health: " << enemy.getHealth() << "\n\n";
 
     while (enemy.isAlive()) {
         cout << "What do you do?\n";
-        cout << "1. Attack\n";
-        cout << "2. Flee\n";
+        cout << "1. Attack";
+        if (!inventory.empty()) {
+            cout << " (using " << inventory.back().getName() 
+                 << ", damage: " << inventory.back().getDamage() 
+                 << ", durability: " << inventory.back().getDurability() << ")";
+        }
+        cout << "\n2. Flee\n";
         cout << "Choose (1-2): ";
 
         int choice;
         cin >> choice;
 
         if (choice == 1) {
-            int damage = rand() % 20 + 10;
+            int damage;
+            if (!inventory.empty() && inventory.back().getDurability() > 0) {
+                damage = inventory.back().getDamage();
+                inventory.back().use(); // reduce durability
+                cout << "You attack with " << inventory.back().getName() << " and deal " << damage << " damage!\n";
+                if (inventory.back().getDurability() == 0) {
+                    cout << inventory.back().getName() << " has broken!\n";
+                    inventory.pop_back();
+                }
+            } else {
+                damage = rand() % 10 + 5; // bare hands, weaker
+                cout << "You attack with bare hands and deal " << damage << " damage!\n";
+            }
+
             enemy.setHealth(enemy.getHealth() - damage);
-            cout << "You attack and deal " << damage << " damage!\n";
             if (enemy.isAlive()) {
                 cout << enemy.getName() << " has " << enemy.getHealth() << " HP left.\n\n";
             } else {
@@ -50,6 +77,7 @@ int main() {
 
     map<string, string> roomEnemyName;
 
+    // Load rooms from rooms.csv
     if (file.is_open()) {
         while (getline(file, line)) {
             if (line.empty()) continue;
@@ -78,10 +106,11 @@ int main() {
         }
         file.close();
     } else {
-        cout << "Unable to open file" << endl;
+        cout << "Unable to open rooms.csv" << endl;
         return 1;
     }
 
+    // Load enemies from enemies.csv
     map<string, Enemy> enemies;
     ifstream enemyFile("enemies.csv");
     if (enemyFile.is_open()) {
@@ -116,19 +145,48 @@ int main() {
 
     introduction();
 
+    // Player weapon inventory
+    vector<Weapon> inventory;
+
+    // Game loop
     auto current = castleRooms.getHead();
     while (current != nullptr) {
-        cout << "=== " << current->room.getName() << " ===\n";
-        cout << current->room.getDescription() << "\n";
-        if (!current->room.getItem().empty()) {
-            cout << "You notice an item here: " << current->room.getItem() << "\n";
+        Room& room = current->room;
+
+        cout << "=== " << room.getName() << " ===\n";
+        cout << room.getDescription() << "\n";
+
+        // Show weapon item in room and offer to pick it up
+        if (!room.getItem().empty()) {
+            cout << "You notice a weapon here: " << room.getItem() << "\n";
+            cout << "Pick it up? (1 = Yes, 2 = No): ";
+            int pick;
+            cin >> pick;
+            if (pick == 1) {
+                // Create weapon with default stats based on item name
+                Weapon w(room.getItem(), "A weapon found in the castle.", 5, {"Attack"}, 20);
+                inventory.push_back(w);
+                room.setItem(""); // remove from room
+                cout << room.getItem().empty() ? "" : "";
+                cout << "You picked up the " << w.getName() << "! (damage: " << w.getDamage() << ", durability: " << w.getDurability() << ")\n";
+            }
         }
 
-        string roomName = current->room.getName();
+        // Show inventory
+        if (!inventory.empty()) {
+            cout << "Inventory: ";
+            for (auto& w : inventory) {
+                cout << w.getName() << " (dur:" << w.getDurability() << ") ";
+            }
+            cout << "\n";
+        }
+
+        // Fight enemy if present
+        string roomName = room.getName();
         if (roomEnemyName.count(roomName) && enemies.count(roomEnemyName[roomName])) {
             Enemy& enemy = enemies.at(roomEnemyName[roomName]);
             if (enemy.isAlive()) {
-                fightEnemy(enemy);
+                fightEnemy(enemy, inventory);
             }
         }
 
@@ -137,27 +195,27 @@ int main() {
         bool leaveRoom = false;
         while (!leaveRoom) {
             int actionNum = 1;
-            for (const auto& action : current->room.getActions()) {
+            for (const auto& action : room.getActions()) {
                 cout << actionNum++ << ". " << action << "\n";
             }
 
             int choice;
-            cout << "Choose an action (1-" << current->room.getActions().size() << "): ";
+            cout << "Choose an action (1-" << room.getActions().size() << "): ";
             cin >> choice;
 
-            if (choice < 1 || choice > (int)current->room.getActions().size()) {
+            if (choice < 1 || choice > (int)room.getActions().size()) {
                 cout << "Invalid choice. Try again.\n\n";
                 continue;
             }
 
-            string chosen = current->room.getActions()[choice - 1];
+            string chosen = room.getActions()[choice - 1];
             cout << "\n> " << chosen << "\n";
 
-            if (choice == (int)current->room.getActions().size()) {
-                cout << "You leave the " << current->room.getName() << " behind.\n\n";
+            if (choice == (int)room.getActions().size()) {
+                cout << "You leave the " << room.getName() << " behind.\n\n";
                 leaveRoom = true;
             } else {
-                cout << "You " << chosen << " in the " << current->room.getName() << ".\n";
+                cout << "You " << chosen << " in the " << room.getName() << ".\n";
                 cout << "Interesting... but there's more to do here.\n\n";
             }
         }
