@@ -7,6 +7,7 @@
 #include "LinkedList.h"
 #include "Enemy.h"
 #include "Weapon.h"
+#include "Hero.h"
 
 using namespace std;
 
@@ -17,19 +18,18 @@ void introduction() {
     cout << "==========================================\n\n";
 }
 
-// Fight enemy using weapon if available, otherwise bare hands
-bool fightEnemy(Enemy& enemy, vector<Weapon>& inventory) {
+bool fightEnemy(Enemy& enemy, vector<Weapon>& inventory, Hero& player) {
     cout << "\n*** ENEMY ENCOUNTERED ***\n";
     cout << "Enemy: " << enemy.getName() << "\n";
     cout << "Description: " << enemy.getDescription() << "\n";
     cout << "Health: " << enemy.getHealth() << "\n\n";
 
-    while (enemy.isAlive()) {
+    while (enemy.isAlive() && player.isAlive()) {
         cout << "What do you do?\n";
         cout << "1. Attack";
         if (!inventory.empty()) {
-            cout << " (using " << inventory.back().getName() 
-                 << ", damage: " << inventory.back().getDamage() 
+            cout << " (using " << inventory.back().getName()
+                 << ", damage: " << inventory.back().getDamage()
                  << ", durability: " << inventory.back().getDurability() << ")";
         }
         cout << "\n2. Flee\n";
@@ -42,20 +42,27 @@ bool fightEnemy(Enemy& enemy, vector<Weapon>& inventory) {
             int damage;
             if (!inventory.empty() && inventory.back().getDurability() > 0) {
                 damage = inventory.back().getDamage();
-                inventory.back().use(); // reduce durability
+                inventory.back().use();
                 cout << "You attack with " << inventory.back().getName() << " and deal " << damage << " damage!\n";
                 if (inventory.back().getDurability() == 0) {
                     cout << inventory.back().getName() << " has broken!\n";
                     inventory.pop_back();
                 }
             } else {
-                damage = rand() % 10 + 5; // bare hands, weaker
+                damage = rand() % 10 + 5;
                 cout << "You attack with bare hands and deal " << damage << " damage!\n";
             }
 
             enemy.setHealth(enemy.getHealth() - damage);
             if (enemy.isAlive()) {
-                cout << enemy.getName() << " has " << enemy.getHealth() << " HP left.\n\n";
+                cout << enemy.getName() << " has " << enemy.getHealth() << " HP left.\n";
+                // Enemy attacks back
+                int enemyDamage = rand() % 10 + 5;
+                player.takeDamage(enemyDamage);
+                if (!player.isAlive()) {
+                    cout << "\nGAME OVER: You have been defeated by " << enemy.getName() << "!\n";
+                    return false;
+                }
             } else {
                 cout << "You defeated the " << enemy.getName() << "!\n\n";
                 return true;
@@ -67,10 +74,13 @@ bool fightEnemy(Enemy& enemy, vector<Weapon>& inventory) {
             cout << "Invalid choice.\n";
         }
     }
-    return true;
+    return player.isAlive();
 }
 
 int main() {
+    // Initialize Hero
+    Hero player("Arthur", "A brave knight", 100, {"Shield"});
+
     LinkedList castleRooms;
     ifstream file("rooms.csv");
     string line;
@@ -146,39 +156,32 @@ int main() {
     introduction();
 
     // Player weapon inventory
-    vector<Weapon> inventory;
+    vector<Weapon> weaponInventory;
 
     // Game loop
     auto current = castleRooms.getHead();
-    while (current != nullptr) {
+    while (current != nullptr && player.isAlive()) {
         Room& room = current->room;
+
+        // Show hero status at start of each room
+        player.displayStatus();
 
         cout << "=== " << room.getName() << " ===\n";
         cout << room.getDescription() << "\n";
 
-        // Show weapon item in room and offer to pick it up
+        // Offer weapon pickup
         if (!room.getItem().empty()) {
             cout << "You notice a weapon here: " << room.getItem() << "\n";
             cout << "Pick it up? (1 = Yes, 2 = No): ";
             int pick;
             cin >> pick;
             if (pick == 1) {
-                // Create weapon with default stats based on item name
                 Weapon w(room.getItem(), "A weapon found in the castle.", 5, {"Attack"}, 20);
-                inventory.push_back(w);
-                room.setItem(""); // remove from room
-                cout << room.getItem().empty() ? "" : "";
+                weaponInventory.push_back(w);
+                player.addItem(room.getItem()); // also add to hero inventory
+                room.setItem("");
                 cout << "You picked up the " << w.getName() << "! (damage: " << w.getDamage() << ", durability: " << w.getDurability() << ")\n";
             }
-        }
-
-        // Show inventory
-        if (!inventory.empty()) {
-            cout << "Inventory: ";
-            for (auto& w : inventory) {
-                cout << w.getName() << " (dur:" << w.getDurability() << ") ";
-            }
-            cout << "\n";
         }
 
         // Fight enemy if present
@@ -186,14 +189,15 @@ int main() {
         if (roomEnemyName.count(roomName) && enemies.count(roomEnemyName[roomName])) {
             Enemy& enemy = enemies.at(roomEnemyName[roomName]);
             if (enemy.isAlive()) {
-                fightEnemy(enemy, inventory);
+                bool survived = fightEnemy(enemy, weaponInventory, player);
+                if (!survived || !player.isAlive()) break;
             }
         }
 
         cout << "\nWhat do you do?\n";
 
         bool leaveRoom = false;
-        while (!leaveRoom) {
+        while (!leaveRoom && player.isAlive()) {
             int actionNum = 1;
             for (const auto& action : room.getActions()) {
                 cout << actionNum++ << ". " << action << "\n";
@@ -223,6 +227,12 @@ int main() {
         current = current->next;
     }
 
-    cout << "You have reached the end of your adventure!\n";
+    // End game
+    if (!player.isAlive()) {
+        cout << "\nGAME OVER: " << player.getName() << " has perished in the castle.\n";
+    } else {
+        cout << "\nVICTORY: " << player.getName() << " has successfully navigated the castle!\n";
+    }
+
     return 0;
 }
