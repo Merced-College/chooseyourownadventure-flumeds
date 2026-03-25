@@ -1,3 +1,3 @@
 [![Open in Codespaces](https://classroom.github.com/assets/launch-codespace-2972f46106e565e64193e422d61a12cf1da4916b45550586e14ef0a7c637dd04.svg)](https://classroom.github.com/open-in-codespaces?assignment_repo_id=23170747)
 # chooseYourOwnAdventure
-
+In order to add enemy object to my game, I had to make three files called enemy.cpp, enemy.h, and enemies.csv. The Enemy class has attributes like name, health, abilties, description, and alive status. As soon as the enemy helath is at 0 the boolean isAlive is set to false. In rooms.csv i added a fifth column that has the enemy name for each specific room. In main i added a function called fightEnemy() to cause a fight when the player enters room that has a enemy. The last thing i added/changed was in MakeFile where i added Enemy.cpp so it can compile.
